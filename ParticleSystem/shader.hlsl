@@ -1,8 +1,23 @@
+//	-	-	  Constant Buffers	-	-
+cbuffer CB_Application : register(b0)
+{
+	matrix gViewProjection;
+};
 
+cbuffer CB_PerFrame : register(b1)
+{
+	float gTime;
+}
+//	-	-   In/Output Definitions	-	-
 struct I_Vertex
 {
 	float3 position : POSITION;
 	float2 tex : TEXCOORD;
+};
+
+struct I_Instance
+{
+	matrix world;
 };
 
 struct O_Vertex
@@ -11,6 +26,7 @@ struct O_Vertex
 	float2 tex : TEXCOORD;
 };
 
+//	-	-  Pipeline Stage Functions	-	-
 O_Vertex vert(I_Vertex i)
 {
 	O_Vertex o;
@@ -21,5 +37,7 @@ O_Vertex vert(I_Vertex i)
 
 float4 pixel(O_Vertex i) : SV_TARGET
 {
-	return float4(i.tex, 1.0, 1.0);
+	float2 uv = i.tex * 2.0 - 1.0;
+	float circle = smoothstep(1.0, 0.9, length(uv));
+	return float4(circle, circle, circle, 1.0);
 }
