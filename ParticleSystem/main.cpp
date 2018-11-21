@@ -3,9 +3,39 @@
 #include <stdio.h>
 #include <queue>
 #include "Renderer.h"
-
+#include <DirectXColors.h>
+#include <DirectXMath.h>
+#include <comdef.h>
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+
+using std::puts;
+using std::printf;
+using std::queue;
+using namespace DirectX;
+using namespace std::chrono;
+
+enum CBuffers
+{
+	CB_Application,
+	CB_PerFrame,
+	NumCBuffers
+};
+struct CBuffer
+{
+	struct Application
+	{
+		XMMATRIX viewProjection;
+	};
+	struct PerFrame
+	{
+		XMFLOAT4 time;
+		XMFLOAT4 color;
+	};
+};
+
+const int WIDTH = 800, HEIGHT = 800;
+const int MAX_FRAMERATE_TIMES = 100;
 
 bool isRunning = true;
 float syncInterval = 1;
@@ -16,12 +46,20 @@ ID3D11InputLayout * inputLayout;
 ID3D11VertexShader * vShader;
 ID3D11PixelShader * pShader;
 
-const int WIDTH = 800, HEIGHT = 800;
+ID3D11Buffer * CBuffers[NumCBuffers];
 
-using std::puts;
-using std::printf;
-using std::queue;
-using namespace std::chrono;
+float CalcAvgFramerate(queue<float> & buffer)
+{
+	// pop until <= MAX_FRAMERATE_TIMES
+	while (buffer.size() > MAX_FRAMERATE_TIMES)
+		buffer.pop();
+	float average = 0;
+	for (size_t i = 0; i < buffer.size(); i++)
+	{
+		average += buffer._Get_container()[i];
+	}
+	return average / buffer.size();
+}
 
 void Cleanup(void)
 {
@@ -116,6 +154,46 @@ int main(int argc, char ** argv)
 
 		iBuffer = renderer.CreateBuffer(&ibd, &data);
 	}
+	// CBuffers
+	// Application
+	{
+		CBuffer::Application buffer {
+			XMMatrixIdentity()
+		};
+
+		D3D11_BUFFER_DESC desc;
+		desc.Usage = D3D11_USAGE_DYNAMIC;
+		desc.ByteWidth = sizeof(CBuffer::Application);
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		desc.MiscFlags = NULL;
+		desc.StructureByteStride = NULL;
+
+		D3D11_SUBRESOURCE_DATA data;
+		data.pSysMem = &buffer;
+
+		CBuffers[CB_Application] = renderer.CreateBuffer(&desc, &data);
+	}
+	// Frame
+	{
+		CBuffer::PerFrame buffer;
+		buffer.time = XMFLOAT4();
+		buffer.color = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
+
+		D3D11_BUFFER_DESC desc;
+		desc.Usage = D3D11_USAGE_DYNAMIC;
+		desc.ByteWidth = sizeof(CBuffer::PerFrame);
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		desc.MiscFlags = NULL;
+		desc.StructureByteStride = NULL;
+
+		D3D11_SUBRESOURCE_DATA data;
+		data.pSysMem = &buffer;
+
+		CBuffers[CB_PerFrame] = renderer.CreateBuffer(&desc, &data);
+	}
+
 	// Shaders
 
 	UINT compileFlags = 0;
@@ -150,6 +228,24 @@ int main(int argc, char ** argv)
 	// Misc
 	queue<float> framerateBuffer;
 
+	XMFLOAT3 eyePos = XMFLOAT3(0.0f, 0.0f, -1.0f);
+	XMFLOAT3 target = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	XMFLOAT3 up = XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+	XMMATRIX view = XMMatrixLookAtLH(XMLoadFloat3(&eyePos), XMLoadFloat3(&target), XMLoadFloat3(&up));
+	XMMATRIX projection = XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.0f, 0.01f, 100.0f);
+
+	XMMATRIX vp = view * projection;
+
+	D3D11_MAPPED_SUBRESOURCE appBuffer;
+	renderer.GetContext()->Map(CBuffers[CB_Application], 0, D3D11_MAP_WRITE_DISCARD, 0, &appBuffer);
+	CBuffer::Application * buffer = (CBuffer::Application *)appBuffer.pData;
+	buffer->viewProjection = XMMatrixTranspose(vp);
+	renderer.GetContext()->Unmap(CBuffers[CB_Application], 0);
+
+	renderer.GetContext()->VSSetConstantBuffers(0, 1, &CBuffers[CB_Application]);
+	renderer.GetContext()->PSSetConstantBuffers(0, 1, &CBuffers[CB_Application]);
+
 	// Run
 
 	while (isRunning)
@@ -170,6 +266,26 @@ int main(int argc, char ** argv)
 			float dt = delta.count();
 
 			framerateBuffer.push(dt);
+
+			// Update PerFrame CBuffer
+			duration<float> appTime = thisTime - startTime;
+			
+			D3D11_MAPPED_SUBRESOURCE perFrameMappedSubresource;
+			hr = renderer.GetContext()->Map(CBuffers[CB_PerFrame], 0, D3D11_MAP_WRITE_DISCARD, 0, &perFrameMappedSubresource);
+			if (FAILED(hr))
+			{
+				_com_error err(hr);
+				printf("Error Mapping Per Frame CBuffer: %s", err.ErrorMessage());
+			}
+			CBuffer::PerFrame * perFrameBuffer = (CBuffer::PerFrame *)perFrameMappedSubresource.pData;
+			perFrameBuffer->time = XMFLOAT4(appTime.count(), dt, 0.0f, 1.0f);
+			XMStoreFloat4(&perFrameBuffer->color, DirectX::Colors::CornflowerBlue);
+
+			renderer.GetContext()->Unmap(CBuffers[CB_PerFrame], 0);
+
+			renderer.GetContext()->VSSetConstantBuffers(1, 1, &CBuffers[CB_PerFrame]);
+			renderer.GetContext()->PSSetConstantBuffers(1, 1, &CBuffers[CB_PerFrame]);
+
 			//	-	-	Begin Drawing
 			UINT strides[] = { sizeof(float) * 5 };
 			UINT offsets[] = { 0 };
@@ -187,7 +303,7 @@ int main(int argc, char ** argv)
 
 			//	-	-	End Drawing
 			renderer.SwapBuffers();
-			//printf("\rDrawing. FrameTime = %.0f\t", 1.0f / AverageFramerate(framerateBuffer));
+			printf("\rDrawing. Framerate = %.0f,\t Last Frame: %.3f,\t Time: %.1f", 1.0f / CalcAvgFramerate(framerateBuffer), delta.count(), appTime.count());
 		}
 	}
 	puts("");

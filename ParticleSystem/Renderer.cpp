@@ -128,7 +128,12 @@ bool Renderer::OnResize(int width, int height, HWND & window)
 ID3D11Buffer * Renderer::CreateBuffer(D3D11_BUFFER_DESC * desc, D3D11_SUBRESOURCE_DATA * data)
 {
 	ID3D11Buffer * buffer = nullptr;
-	device->CreateBuffer(desc, data, &buffer);
+	HRESULT hr = device->CreateBuffer(desc, data, &buffer);
+	if (FAILED(hr))
+	{
+		_com_error err(hr);
+		printf("Error Creating Buffer: %s", err.ErrorMessage());
+	}
 	return buffer;
 }
 
@@ -179,15 +184,12 @@ void Renderer::SwapBuffers()
 	swapChain->Present(presentSyncInterval, 0);
 }
 
-float Renderer::CalcAvgFramerate(queue<float> & buffer)
+ID3D11DeviceContext * Renderer::GetContext() const
 {
-	// pop until <= MAX_FRAMERATE_TIMES
-	while (buffer.size() > MAX_FRAMERATE_TIMES)
-		buffer.pop();
-	float average = 0;
-	for (size_t i = 0; i < buffer.size(); i++)
-	{
-		average += buffer._Get_container()[i];
-	}
-	return average / buffer.size();
+	return context;
+}
+
+ID3D11Device * Renderer::GetDevice() const
+{
+	return device;
 }

@@ -2,15 +2,11 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <dxgi1_6.h>
-#include <DirectXColors.h>
-#include <queue>
+#include <comdef.h>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3dcompiler.lib")
-
-using std::queue;
-
 
 class Renderer
 {
@@ -24,7 +20,7 @@ private:
 	ID3D11DepthStencilView * dsv;
 
 	UINT msaaQuality;
-	UINT presentSyncInterval = 0;
+	UINT presentSyncInterval = 2;
 
 	const int MAX_FRAMERATE_TIMES = 100;
 
@@ -51,9 +47,8 @@ public:
 	void DrawIndexed(UINT numElements, UINT startIndex, int startVertex);
 	void SwapBuffers();
 
-private:
-
-	float CalcAvgFramerate(queue<float> &);
+	ID3D11DeviceContext * GetContext() const;
+	ID3D11Device * GetDevice() const;
 };
 
 template<typename T>
@@ -66,7 +61,12 @@ template<>
 inline ID3D11VertexShader * Renderer::CreateShader<ID3D11VertexShader>(ID3DBlob * compiledShader)
 {
 	ID3D11VertexShader * shader = nullptr;
-	device->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), NULL, &shader);
+	HRESULT hr = device->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), NULL, &shader);
+	if (FAILED(hr))
+	{
+		_com_error err(hr);
+		printf("Error Creating Vertex Shader: %s", err.ErrorMessage());
+	}
 	return shader;
 }
 
@@ -74,7 +74,12 @@ template<>
 inline ID3D11PixelShader * Renderer::CreateShader<ID3D11PixelShader>(ID3DBlob * compiledShader)
 {
 	ID3D11PixelShader * shader = nullptr;
-	device->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), NULL, &shader);
+	HRESULT hr = device->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), NULL, &shader);
+	if (FAILED(hr))
+	{
+		_com_error err(hr);
+		printf("Error Creating Pixel Shader: %s", err.ErrorMessage());
+	}
 	return shader;
 }
 template<typename T>

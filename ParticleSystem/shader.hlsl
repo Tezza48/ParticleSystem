@@ -6,7 +6,8 @@ cbuffer CB_Application : register(b0)
 
 cbuffer CB_PerFrame : register(b1)
 {
-	float gTime;
+	float4 gTime;
+	float4 gColor;
 }
 //	-	-   In/Output Definitions	-	-
 struct I_Vertex
@@ -30,7 +31,7 @@ struct O_Vertex
 O_Vertex vert(I_Vertex i)
 {
 	O_Vertex o;
-	o.position = float4(i.position, 1.0);
+	o.position = mul(float4(i.position, 1.0), gViewProjection);
 	o.tex = i.tex;
 	return o;
 }
@@ -38,6 +39,9 @@ O_Vertex vert(I_Vertex i)
 float4 pixel(O_Vertex i) : SV_TARGET
 {
 	float2 uv = i.tex * 2.0 - 1.0;
-	float circle = smoothstep(1.0, 0.9, length(uv));
+
+	float size = cos(gTime.x) * 0.45 + 0.55;
+
+	float circle = smoothstep(size, size - 0.1, length(uv));
 	return float4(circle, circle, circle, 1.0);
 }
