@@ -15,6 +15,17 @@ using std::queue;
 using namespace DirectX;
 using namespace std::chrono;
 
+struct Vertex
+{
+	XMFLOAT3 position;
+	XMFLOAT2 texCoord;
+};
+
+struct Instance
+{
+	XMMATRIX world;
+};
+
 enum CBuffers
 {
 	CB_Application,
@@ -66,8 +77,10 @@ void Cleanup(void)
 	if (inputLayout)inputLayout->Release();
 	if (vShader)vShader->Release();
 	if (pShader)pShader->Release();
+	for (size_t i = 0; i < NumCBuffers; i++)
+		if (CBuffers[i])CBuffers[i]->Release();
 
-	system("PAUSE");
+	//system("PAUSE");
 }
 
 int main(int argc, char ** argv)
@@ -110,20 +123,28 @@ int main(int argc, char ** argv)
 	auto startTime = high_resolution_clock::now();
 	auto lastTime = high_resolution_clock::now();
 
-	ID3D11Buffer * vBuffer, * iBuffer;
+	ID3D11Buffer * vertexBuffers[2], * indexBuffer;
 	HRESULT hr;
 	// VBuffer
 	{
-		float verts[] = {
-			-0.5, -0.5, 0.0,	 0.0, 0.0,
-			-0.5,  0.5, 0.0,	 0.0, 1.0,
-			 0.5,  0.5, 0.0,	 1.0, 1.0,
-			 0.5, -0.5, 0.0,	 1.0, 0.0
+		Vertex verts[] = {
+			{XMFLOAT3(-0.5, -0.5, 0.0), XMFLOAT2(0.0, 0.0)},
+			{XMFLOAT3(-0.5,  0.5, 0.0), XMFLOAT2(0.0, 1.0)},
+			{XMFLOAT3 (0.5,  0.5, 0.0), XMFLOAT2(1.0, 1.0)},
+			{XMFLOAT3( 0.5, -0.5, 0.0), XMFLOAT2(1.0, 0.0)}
 		};
 
 		D3D11_BUFFER_DESC vbd;
 		vbd.Usage = D3D11_USAGE_IMMUTABLE;
-		vbd.ByteWidth = sizeof(float) * 5 * 4;
+		vbd.ByteWidth = sizeof(Vertex) * 4;
+		vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		vbd.CPUAccessFlags = NULL;
+		vbd.MiscFlags = NULL;
+		vbd.StructureByteStride = 0;
+
+		D3D11_BUFFER_DESC ibd;
+		vbd.Usage = D3D11_USAGE_IMMUTABLE;
+		vbd.ByteWidth = sizeof(Vertex) * 4;
 		vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 		vbd.CPUAccessFlags = NULL;
 		vbd.MiscFlags = NULL;
@@ -132,7 +153,7 @@ int main(int argc, char ** argv)
 		D3D11_SUBRESOURCE_DATA data;
 		data.pSysMem = verts;
 
-		vBuffer = renderer.CreateBuffer(&vbd, &data);
+		vertexBuffers[0] = renderer.CreateBuffer(&vbd, &data);
 	}
 	// IBuffer
 	{
@@ -152,7 +173,7 @@ int main(int argc, char ** argv)
 		D3D11_SUBRESOURCE_DATA data;
 		data.pSysMem = indices;
 
-		iBuffer = renderer.CreateBuffer(&ibd, &data);
+		indexBuffer = renderer.CreateBuffer(&ibd, &data);
 	}
 	// CBuffers
 	// Application
@@ -228,7 +249,7 @@ int main(int argc, char ** argv)
 	// Misc
 	queue<float> framerateBuffer;
 
-	XMFLOAT3 eyePos = XMFLOAT3(0.0f, 0.0f, -1.0f);
+	XMFLOAT3 eyePos = XMFLOAT3(0.0f, 0.0f, -5.0f);
 	XMFLOAT3 target = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 up = XMFLOAT3(0.0f, 1.0f, 0.0f);
 
@@ -296,14 +317,15 @@ int main(int argc, char ** argv)
 			renderer.SetShader(pShader);
 
 			renderer.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			renderer.SetVertexBuffers(0, 1, &vBuffer, strides, offsets);
-			renderer.SetIndexBuffer(iBuffer, DXGI_FORMAT_R32_UINT, 0);
+			renderer.SetVertexBuffers(0, 1, &vertexBuffer, strides, offsets);
+			renderer.SetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
-			renderer.DrawIndexed(6, 0, 0);
+			//renderer.DrawIndexed(6, 0, 0);
+			renderer.DrawIndexedInstanced(6, 5, 0, 0, 0);
 
 			//	-	-	End Drawing
 			renderer.SwapBuffers();
-			printf("\rDrawing. Framerate = %.0f,\t Last Frame: %.3f,\t Time: %.1f", 1.0f / CalcAvgFramerate(framerateBuffer), delta.count(), appTime.count());
+			printf("\rDrawing. Framerate = %.0f,\t Last Frame: %.4f,\t Time: %.1f", 1.0f / CalcAvgFramerate(framerateBuffer), delta.count(), appTime.count());
 		}
 	}
 	puts("");

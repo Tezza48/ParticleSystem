@@ -28,11 +28,12 @@ struct O_Vertex
 };
 
 //	-	-  Pipeline Stage Functions	-	-
-O_Vertex vert(I_Vertex i)
+O_Vertex vert(I_Vertex iv, uint instanceID : SV_InstanceID)
 {
 	O_Vertex o;
-	o.position = mul(float4(i.position, 1.0), gViewProjection);
-	o.tex = i.tex;
+	o.position = mul(float4(iv.position, 1.0), gViewProjection);
+	o.position.x += instanceID;
+	o.tex = iv.tex;
 	return o;
 }
 

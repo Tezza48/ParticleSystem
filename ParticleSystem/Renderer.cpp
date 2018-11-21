@@ -179,6 +179,11 @@ void Renderer::DrawIndexed(UINT indexCount, UINT startIndex, int startVertex)
 	context->DrawIndexed(indexCount, startIndex, startVertex);
 }
 
+void Renderer::DrawIndexedInstanced(UINT indexCountPerObject, UINT instanceCount, UINT startIndex, int startVertex, UINT startInstance)
+{
+	context->DrawIndexedInstanced(indexCountPerObject, instanceCount, startIndex, startVertex, startInstance);
+}
+
 void Renderer::SwapBuffers()
 {
 	swapChain->Present(presentSyncInterval, 0);

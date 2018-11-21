@@ -20,7 +20,7 @@ private:
 	ID3D11DepthStencilView * dsv;
 
 	UINT msaaQuality;
-	UINT presentSyncInterval = 2;
+	UINT presentSyncInterval = 1;
 
 	const int MAX_FRAMERATE_TIMES = 100;
 
@@ -45,6 +45,7 @@ public:
 	void SetIndexBuffer(ID3D11Buffer * buffer, DXGI_FORMAT format, UINT offset);
 	template<typename T> void SetShader(T * shader);
 	void DrawIndexed(UINT numElements, UINT startIndex, int startVertex);
+	void DrawIndexedInstanced(UINT indexCountPerObject, UINT instanceCount, UINT startIndex, int startVertex, UINT startInstance);
 	void SwapBuffers();
 
 	ID3D11DeviceContext * GetContext() const;
