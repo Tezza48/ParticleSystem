@@ -59,7 +59,6 @@ const int WIDTH = 800, HEIGHT = 800;
 const int MAX_FRAMERATE_TIMES = 100;
 
 bool isRunning = true;
-float syncInterval = 1;
 
 MSG msg;
 
@@ -156,7 +155,9 @@ int main(int argc, char ** argv)
 		std::uniform_real_distribution<float> dist(-2.0f, 2.0f);
 		for (size_t i = 0; i < numParticles; i++)
 		{
-			instances[i].position = XMFLOAT3(dist(mt), dist(mt), dist(mt));
+			XMVECTOR dir = XMVector3Normalize(XMVectorSet(dist(mt), dist(mt), dist(mt), 0.0f));
+			dir = XMVectorScale(dir, dist(mt));
+			XMStoreFloat3(&instances[i].position, dir);
 			instances[i].color = XMFLOAT4(dist(mt), dist(mt), dist(mt), 1.0f);
 		}
 
