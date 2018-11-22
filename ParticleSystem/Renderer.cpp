@@ -45,13 +45,13 @@ bool Renderer::OnResize(int width, int height, HWND & window)
 	sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	sd.SampleDesc.Count = 4;
-	sd.SampleDesc.Quality = msaaQuality - 1;
+	sd.SampleDesc.Count = 1;
+	sd.SampleDesc.Quality = 0;
 	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	sd.BufferCount = 1;
+	sd.BufferCount = 2;
 	sd.OutputWindow = window;
 	sd.Windowed = true;
-	sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+	sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;// Flip
 	sd.Flags = NULL;
 
 	IDXGIDevice * dxgiDevice = nullptr;
@@ -66,7 +66,12 @@ bool Renderer::OnResize(int width, int height, HWND & window)
 	hr = adapter->GetParent(__uuidof(IDXGIFactory), (void**)&factory);
 	if (FAILED(hr)) return false;
 	hr = factory->CreateSwapChain(device, &sd, &swapChain);
-	if (FAILED(hr)) return false;
+	if (FAILED(hr))
+	{
+		_com_error err(hr);
+		printf("Failed To Create Swap Chain: %s", err.ErrorMessage());
+		return false;
+	}
 	hr = factory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER);
 	if (FAILED(hr)) return false;
 	
@@ -93,8 +98,8 @@ bool Renderer::OnResize(int width, int height, HWND & window)
 	dsd.MipLevels = 1;
 	dsd.ArraySize = 1;
 	dsd.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	dsd.SampleDesc.Count = 4;
-	dsd.SampleDesc.Quality = msaaQuality - 1;
+	dsd.SampleDesc.Count = 1;
+	dsd.SampleDesc.Quality = 0;
 	dsd.Usage = D3D11_USAGE_DEFAULT;
 	dsd.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 	dsd.CPUAccessFlags = 0;

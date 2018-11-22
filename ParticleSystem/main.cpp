@@ -6,6 +6,7 @@
 #include <DirectXColors.h>
 #include <DirectXMath.h>
 #include <comdef.h>
+#include <random>
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 
@@ -15,6 +16,13 @@ using std::queue;
 using namespace DirectX;
 using namespace std::chrono;
 
+struct Particle
+{
+	float birthTime;
+	XMFLOAT3 position;
+	XMFLOAT3 velocity;
+};
+
 struct Vertex
 {
 	XMFLOAT3 position;
@@ -23,7 +31,8 @@ struct Vertex
 
 struct Instance
 {
-	XMMATRIX world;
+	XMFLOAT3 position;
+	XMFLOAT4 color;
 };
 
 enum CBuffers
@@ -32,6 +41,7 @@ enum CBuffers
 	CB_PerFrame,
 	NumCBuffers
 };
+
 struct CBuffer
 {
 	struct Application
@@ -59,6 +69,12 @@ ID3D11PixelShader * pShader;
 
 ID3D11Buffer * CBuffers[NumCBuffers];
 
+ID3D11RasterizerState * rasterizerState;
+ID3D11DepthStencilState * depthStencilState;
+ID3D11BlendState * blendState;
+
+UINT numParticles = 100;
+
 float CalcAvgFramerate(queue<float> & buffer)
 {
 	// pop until <= MAX_FRAMERATE_TIMES
@@ -79,8 +95,9 @@ void Cleanup(void)
 	if (pShader)pShader->Release();
 	for (size_t i = 0; i < NumCBuffers; i++)
 		if (CBuffers[i])CBuffers[i]->Release();
-
+#if DEBUG || _DEBUG
 	//system("PAUSE");
+#endif // DEBUG || _DEBUG
 }
 
 int main(int argc, char ** argv)
@@ -134,26 +151,39 @@ int main(int argc, char ** argv)
 			{XMFLOAT3( 0.5, -0.5, 0.0), XMFLOAT2(1.0, 0.0)}
 		};
 
+		Instance *instances = new Instance[numParticles];
+		std::mt19937 mt(static_cast<unsigned int>(startTime.time_since_epoch().count()));
+		std::uniform_real_distribution<float> dist(-2.0f, 2.0f);
+		for (size_t i = 0; i < numParticles; i++)
+		{
+			instances[i].position = XMFLOAT3(dist(mt), dist(mt), dist(mt));
+			instances[i].color = XMFLOAT4(dist(mt), dist(mt), dist(mt), 1.0f);
+		}
+
 		D3D11_BUFFER_DESC vbd;
 		vbd.Usage = D3D11_USAGE_IMMUTABLE;
 		vbd.ByteWidth = sizeof(Vertex) * 4;
 		vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-		vbd.CPUAccessFlags = NULL;
-		vbd.MiscFlags = NULL;
+		vbd.CPUAccessFlags = 0;
+		vbd.MiscFlags = 0;
 		vbd.StructureByteStride = 0;
 
 		D3D11_BUFFER_DESC ibd;
-		vbd.Usage = D3D11_USAGE_IMMUTABLE;
-		vbd.ByteWidth = sizeof(Vertex) * 4;
-		vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-		vbd.CPUAccessFlags = NULL;
-		vbd.MiscFlags = NULL;
-		vbd.StructureByteStride = 0;
+		ibd.Usage = D3D11_USAGE_DYNAMIC;
+		ibd.ByteWidth = sizeof(Instance) * numParticles;
+		ibd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+		ibd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		ibd.MiscFlags = 0;
+		ibd.StructureByteStride = 0;
 
-		D3D11_SUBRESOURCE_DATA data;
-		data.pSysMem = verts;
+		D3D11_SUBRESOURCE_DATA vertexSubresourceData;
+		vertexSubresourceData.pSysMem = verts;
 
-		vertexBuffers[0] = renderer.CreateBuffer(&vbd, &data);
+		D3D11_SUBRESOURCE_DATA instanceSubresourceData;
+		instanceSubresourceData.pSysMem = instances;
+
+		vertexBuffers[0] = renderer.CreateBuffer(&vbd, &vertexSubresourceData);
+		vertexBuffers[1] = renderer.CreateBuffer(&ibd, &instanceSubresourceData);
 	}
 	// IBuffer
 	{
@@ -166,9 +196,9 @@ int main(int argc, char ** argv)
 		ibd.Usage = D3D11_USAGE_IMMUTABLE;
 		ibd.ByteWidth = sizeof(unsigned int) * 6;
 		ibd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-		ibd.CPUAccessFlags = NULL;
-		ibd.MiscFlags = NULL;
-		ibd.StructureByteStride = NULL;
+		ibd.CPUAccessFlags = 0;
+		ibd.MiscFlags = 0;
+		ibd.StructureByteStride = 0;
 
 		D3D11_SUBRESOURCE_DATA data;
 		data.pSysMem = indices;
@@ -187,8 +217,8 @@ int main(int argc, char ** argv)
 		desc.ByteWidth = sizeof(CBuffer::Application);
 		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-		desc.MiscFlags = NULL;
-		desc.StructureByteStride = NULL;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
 
 		D3D11_SUBRESOURCE_DATA data;
 		data.pSysMem = &buffer;
@@ -238,15 +268,54 @@ int main(int argc, char ** argv)
 	pShader = renderer.CreateShader<ID3D11PixelShader>(psBlob);
 
 	D3D11_INPUT_ELEMENT_DESC ieDescs[] = {
+		// Vertex Buffer
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
+		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+
+		// Instance Buffer
+		{"POSITION", 1, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+
+		//{"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+		//{"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+		//{"TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
 	};
-	inputLayout = renderer.CreateInputLayout(ieDescs, 2, vsBlob);
+
+	inputLayout = renderer.CreateInputLayout(ieDescs, 4, vsBlob);
 
 	if(vsBlob)vsBlob->Release();
 	if(psBlob)psBlob->Release();
 
 	// Misc
+	D3D11_RASTERIZER_DESC rasterizerDesc;
+	ZeroMemory(&rasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
+	rasterizerDesc.FillMode = D3D11_FILL_SOLID;
+	rasterizerDesc.CullMode = D3D11_CULL_NONE;
+	rasterizerDesc.DepthClipEnable = true;
+	rasterizerDesc.ScissorEnable = false;
+	rasterizerDesc.MultisampleEnable = false;
+
+	renderer.GetDevice()->CreateRasterizerState(&rasterizerDesc, &rasterizerState);
+
+	D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
+	ZeroMemory(&depthStencilDesc, sizeof(D3D11_DEPTH_STENCIL_DESC));
+	depthStencilDesc.DepthEnable = false;
+
+	renderer.GetDevice()->CreateDepthStencilState(&depthStencilDesc, &depthStencilState);
+
+	D3D11_BLEND_DESC blendDesc;
+	ZeroMemory(&blendDesc, sizeof(D3D11_BLEND_DESC));
+	blendDesc.RenderTarget->BlendEnable = true;
+	blendDesc.RenderTarget->SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	blendDesc.RenderTarget->DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	blendDesc.RenderTarget->BlendOp = D3D11_BLEND_OP_ADD;
+	blendDesc.RenderTarget->SrcBlendAlpha = D3D11_BLEND_ZERO;
+	blendDesc.RenderTarget->DestBlendAlpha = D3D11_BLEND_ZERO;
+	blendDesc.RenderTarget->BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	blendDesc.RenderTarget->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+	renderer.GetDevice()->CreateBlendState(&blendDesc, &blendState);
+
 	queue<float> framerateBuffer;
 
 	XMFLOAT3 eyePos = XMFLOAT3(0.0f, 0.0f, -5.0f);
@@ -281,6 +350,10 @@ int main(int argc, char ** argv)
 			renderer.ClearDepthStencil(1.0f, 0);
 			renderer.ClearRenderTarget(DirectX::Colors::Black);
 
+			renderer.GetContext()->RSSetState(rasterizerState);
+			renderer.GetContext()->OMSetBlendState(blendState, 0, 0xffffffff);
+			renderer.GetContext()->OMSetDepthStencilState(depthStencilState, 0);
+
 			auto thisTime = high_resolution_clock::now();
 			duration<float> delta = thisTime - lastTime;
 			lastTime = thisTime;
@@ -308,8 +381,8 @@ int main(int argc, char ** argv)
 			renderer.GetContext()->PSSetConstantBuffers(1, 1, &CBuffers[CB_PerFrame]);
 
 			//	-	-	Begin Drawing
-			UINT strides[] = { sizeof(float) * 5 };
-			UINT offsets[] = { 0 };
+			UINT strides[] = { sizeof(Vertex), sizeof(Instance) };
+			UINT offsets[] = { 0 , 0 };
 
 			renderer.SetInputLayout(inputLayout);
 
@@ -317,11 +390,11 @@ int main(int argc, char ** argv)
 			renderer.SetShader(pShader);
 
 			renderer.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			renderer.SetVertexBuffers(0, 1, &vertexBuffer, strides, offsets);
+			renderer.SetVertexBuffers(0, 2, vertexBuffers, strides, offsets);
 			renderer.SetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
 			//renderer.DrawIndexed(6, 0, 0);
-			renderer.DrawIndexedInstanced(6, 5, 0, 0, 0);
+			renderer.DrawIndexedInstanced(6, numParticles, 0, 0, 0);
 
 			//	-	-	End Drawing
 			renderer.SwapBuffers();
