@@ -1,12 +1,13 @@
-#include <Windows.h>
 #include <chrono>
-#include <stdio.h>
-#include <queue>
-#include "Renderer.h"
+#include <comdef.h>
 #include <DirectXColors.h>
 #include <DirectXMath.h>
-#include <comdef.h>
+#include <queue>
 #include <random>
+#include <stdio.h>
+#include "ParticleEmitter.h"
+#include "Renderer.h"
+#include "WindowManager.h"
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 
@@ -55,6 +56,13 @@ struct CBuffer
 	};
 };
 
+
+#if DEBUG || _DEBUG
+ID3D11Debug * debug;
+#endif // DEBUG || _DEBUG
+
+//WindowManager window;
+//Renderer renderer;
 const int WIDTH = 800, HEIGHT = 800;
 const int MAX_FRAMERATE_TIMES = 100;
 
@@ -62,40 +70,17 @@ bool isRunning = true;
 
 MSG msg;
 
-ID3D11InputLayout * inputLayout;
-ID3D11VertexShader * vShader;
-ID3D11PixelShader * pShader;
-
-ID3D11Buffer * CBuffers[NumCBuffers];
-
-ID3D11RasterizerState * rasterizerState;
-ID3D11DepthStencilState * depthStencilState;
-ID3D11BlendState * blendState;
 
 UINT numParticles = 100;
 
-float CalcAvgFramerate(queue<float> & buffer)
-{
-	// pop until <= MAX_FRAMERATE_TIMES
-	while (buffer.size() > MAX_FRAMERATE_TIMES)
-		buffer.pop();
-	float average = 0;
-	for (size_t i = 0; i < buffer.size(); i++)
-	{
-		average += buffer._Get_container()[i];
-	}
-	return average / buffer.size();
-}
+float CalcAvgFramerate(queue<float> & buffer);
 
 void Cleanup(void)
 {
-	if (inputLayout)inputLayout->Release();
-	if (vShader)vShader->Release();
-	if (pShader)pShader->Release();
-	for (size_t i = 0; i < NumCBuffers; i++)
-		if (CBuffers[i])CBuffers[i]->Release();
 #if DEBUG || _DEBUG
-	//system("PAUSE");
+	debug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+	debug->Release();
+	debug = nullptr;
 #endif // DEBUG || _DEBUG
 }
 
@@ -103,109 +88,41 @@ int main(int argc, char ** argv)
 {
 	atexit(::Cleanup);
 
-	HMODULE instance = GetModuleHandle(NULL);
-	
-	LPCSTR classname = "wndclass";
+	ID3D11InputLayout * inputLayout;
+	ID3D11VertexShader * vShader;
+	ID3D11PixelShader * pShader;
 
-	WNDCLASS wndClass;
-	wndClass.style = CS_HREDRAW | CS_VREDRAW;
-	wndClass.lpfnWndProc = ::WindowProc;// the global one
-	wndClass.cbClsExtra = 0;
-	wndClass.cbWndExtra = 0;
-	wndClass.hInstance = instance;
-	wndClass.hIcon = LoadIcon(instance, IDI_APPLICATION);
-	wndClass.hCursor = LoadCursor(0, IDC_ARROW);
-	wndClass.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-	wndClass.lpszMenuName = 0;
-	wndClass.lpszClassName = classname;
+	ID3D11Buffer * CBuffers[NumCBuffers];
 
-	if (!RegisterClass(&wndClass))
-	{
-		return -1;
-	}
+	ID3D11RasterizerState * rasterizerState;
+	ID3D11DepthStencilState * depthStencilState;
+	ID3D11BlendState * blendState;
 
-	HWND window = CreateWindow(classname, "ParticleSystem", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, WIDTH, HEIGHT, 0, 0, instance, 0);
-
-	ShowWindow(window, SW_SHOW);
-	UpdateWindow(window);
-
+	// Create Win32 Window
+	WindowManager window = WindowManager();
+	if (!window.Init(WIDTH, HEIGHT, ::WindowProc))
+		return false;
 	puts("Window Created Successfully");
 
+	// Init D3D
 	Renderer renderer;
 	if (!renderer.Init()) return -1;
-	if (!renderer.OnResize(WIDTH, HEIGHT, window)) return -1;
+	if (!renderer.OnResize(WIDTH, HEIGHT, window.GetHandle())) return -1;
+
+	HRESULT hr;
+#if DEBUG || _DEBUG
+	// 
+	hr = renderer.GetDevice()->QueryInterface(IID_PPV_ARGS(&debug));
+	if (FAILED(hr)) return false;
+#endif
 
 	// Start
 	auto startTime = high_resolution_clock::now();
 	auto lastTime = high_resolution_clock::now();
 
-	ID3D11Buffer * vertexBuffers[2], * indexBuffer;
-	HRESULT hr;
-	// VBuffer
-	{
-		Vertex verts[] = {
-			{XMFLOAT3(-0.5, -0.5, 0.0), XMFLOAT2(0.0, 0.0)},
-			{XMFLOAT3(-0.5,  0.5, 0.0), XMFLOAT2(0.0, 1.0)},
-			{XMFLOAT3 (0.5,  0.5, 0.0), XMFLOAT2(1.0, 1.0)},
-			{XMFLOAT3( 0.5, -0.5, 0.0), XMFLOAT2(1.0, 0.0)}
-		};
-
-		Instance *instances = new Instance[numParticles];
-		std::mt19937 mt(static_cast<unsigned int>(startTime.time_since_epoch().count()));
-		std::uniform_real_distribution<float> dist(-2.0f, 2.0f);
-		for (size_t i = 0; i < numParticles; i++)
-		{
-			XMVECTOR dir = XMVector3Normalize(XMVectorSet(dist(mt), dist(mt), dist(mt), 0.0f));
-			dir = XMVectorScale(dir, dist(mt));
-			XMStoreFloat3(&instances[i].position, dir);
-			instances[i].color = XMFLOAT4(dist(mt), dist(mt), dist(mt), 1.0f);
-		}
-
-		D3D11_BUFFER_DESC vbd;
-		vbd.Usage = D3D11_USAGE_IMMUTABLE;
-		vbd.ByteWidth = sizeof(Vertex) * 4;
-		vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-		vbd.CPUAccessFlags = 0;
-		vbd.MiscFlags = 0;
-		vbd.StructureByteStride = 0;
-
-		D3D11_BUFFER_DESC ibd;
-		ibd.Usage = D3D11_USAGE_DYNAMIC;
-		ibd.ByteWidth = sizeof(Instance) * numParticles;
-		ibd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-		ibd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-		ibd.MiscFlags = 0;
-		ibd.StructureByteStride = 0;
-
-		D3D11_SUBRESOURCE_DATA vertexSubresourceData;
-		vertexSubresourceData.pSysMem = verts;
-
-		D3D11_SUBRESOURCE_DATA instanceSubresourceData;
-		instanceSubresourceData.pSysMem = instances;
-
-		vertexBuffers[0] = renderer.CreateBuffer(&vbd, &vertexSubresourceData);
-		vertexBuffers[1] = renderer.CreateBuffer(&ibd, &instanceSubresourceData);
-	}
-	// IBuffer
-	{
-		unsigned int indices[] = {
-			0, 1, 2,
-			0, 2, 3
-		};
-
-		D3D11_BUFFER_DESC ibd;
-		ibd.Usage = D3D11_USAGE_IMMUTABLE;
-		ibd.ByteWidth = sizeof(unsigned int) * 6;
-		ibd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-		ibd.CPUAccessFlags = 0;
-		ibd.MiscFlags = 0;
-		ibd.StructureByteStride = 0;
-
-		D3D11_SUBRESOURCE_DATA data;
-		data.pSysMem = indices;
-
-		indexBuffer = renderer.CreateBuffer(&ibd, &data);
-	}
+	ParticleEmitter emitter;
+	emitter.Init(renderer);
+	
 	// CBuffers
 	// Application
 	{
@@ -248,45 +165,50 @@ int main(int argc, char ** argv)
 
 	// Shaders
 
-	UINT compileFlags = 0;
+	{
+		UINT compileFlags = 0;
 #if DEBUG || _DEBUG
-	compileFlags |= D3DCOMPILE_DEBUG;
+		compileFlags |= D3DCOMPILE_DEBUG;
 #endif // DEBUG || _DEBUG
+		ID3DBlob * vsBlob = nullptr;
+		ID3DBlob * psBlob = nullptr;
+		ID3DBlob * shaderError = nullptr;
 
-	ID3DBlob * vsBlob;
-	ID3DBlob * psBlob;
-	ID3DBlob * shaderError;
+		hr = D3DCompileFromFile(L"shader.hlsl", NULL, NULL, "vert", "vs_5_0", compileFlags, NULL, &vsBlob, &shaderError);
+		if (FAILED(hr))
+			puts((char *)shaderError->GetBufferPointer());
 
-	hr = D3DCompileFromFile(L"shader.hlsl", NULL, NULL, "vert", "vs_5_0", compileFlags, NULL, &vsBlob, &shaderError);
-	if (FAILED(hr))
-		puts((char *)shaderError->GetBufferPointer());
+		hr = D3DCompileFromFile(L"shader.hlsl", NULL, NULL, "pixel", "ps_5_0", compileFlags, NULL, &psBlob, &shaderError);
+		if (FAILED(hr))
+			puts((char *)shaderError->GetBufferPointer());
 
-	hr = D3DCompileFromFile(L"shader.hlsl", NULL, NULL, "pixel", "ps_5_0", compileFlags, NULL, &psBlob, &shaderError);
-	if (FAILED(hr))
-		puts((char *)shaderError->GetBufferPointer());
+		if (shaderError)shaderError->Release();
+		shaderError = nullptr;
 
-	vShader = renderer.CreateShader<ID3D11VertexShader>(vsBlob);
-	pShader = renderer.CreateShader<ID3D11PixelShader>(psBlob);
+		vShader = renderer.CreateShader<ID3D11VertexShader>(vsBlob);
+		pShader = renderer.CreateShader<ID3D11PixelShader>(psBlob);
 
-	D3D11_INPUT_ELEMENT_DESC ieDescs[] = {
-		// Vertex Buffer
-		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		D3D11_INPUT_ELEMENT_DESC ieDescs[] = {
+			// Vertex Buffer
+			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 
-		// Instance Buffer
-		{"POSITION", 1, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+			// Instance Buffer
+			{"POSITION", 1, DXGI_FORMAT_R32G32B32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+			{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
 
-		//{"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-		//{"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-		//{"TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
-	};
+			//{"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+			//{"TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1},
+			//{"TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1}
+		};
 
-	inputLayout = renderer.CreateInputLayout(ieDescs, 4, vsBlob);
+		inputLayout = renderer.CreateInputLayout(ieDescs, 4, vsBlob);
 
-	if(vsBlob)vsBlob->Release();
-	if(psBlob)psBlob->Release();
-
+		if (vsBlob)vsBlob->Release();
+		vsBlob = nullptr;
+		if (psBlob)psBlob->Release();
+		psBlob = nullptr;
+	}
 	// Misc
 	D3D11_RASTERIZER_DESC rasterizerDesc;
 	ZeroMemory(&rasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
@@ -319,7 +241,9 @@ int main(int argc, char ** argv)
 
 	queue<float> framerateBuffer;
 
-	XMFLOAT3 eyePos = XMFLOAT3(0.0f, 0.0f, -5.0f);
+	float cameraDistance = 5.0f;
+
+	XMFLOAT3 eyePos = XMFLOAT3(0.0f, 1.6f, -3.0f);
 	XMFLOAT3 target = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 up = XMFLOAT3(0.0f, 1.0f, 0.0f);
 
@@ -330,9 +254,12 @@ int main(int argc, char ** argv)
 
 	D3D11_MAPPED_SUBRESOURCE appBuffer;
 	renderer.GetContext()->Map(CBuffers[CB_Application], 0, D3D11_MAP_WRITE_DISCARD, 0, &appBuffer);
+
 	CBuffer::Application * buffer = (CBuffer::Application *)appBuffer.pData;
 	buffer->viewProjection = XMMatrixTranspose(vp);
+
 	renderer.GetContext()->Unmap(CBuffers[CB_Application], 0);
+	buffer = nullptr;
 
 	renderer.GetContext()->VSSetConstantBuffers(0, 1, &CBuffers[CB_Application]);
 	renderer.GetContext()->PSSetConstantBuffers(0, 1, &CBuffers[CB_Application]);
@@ -382,28 +309,58 @@ int main(int argc, char ** argv)
 			renderer.GetContext()->PSSetConstantBuffers(1, 1, &CBuffers[CB_PerFrame]);
 
 			//	-	-	Begin Drawing
-			UINT strides[] = { sizeof(Vertex), sizeof(Instance) };
-			UINT offsets[] = { 0 , 0 };
-
-			renderer.SetInputLayout(inputLayout);
 
 			renderer.SetShader(vShader);
 			renderer.SetShader(pShader);
 
+			renderer.SetInputLayout(inputLayout);
+
 			renderer.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			renderer.SetVertexBuffers(0, 2, vertexBuffers, strides, offsets);
-			renderer.SetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+			//renderer.SetVertexBuffers(0, 2, vertexBuffers, strides, offsets);
+			//renderer.SetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+
+			emitter.Draw(renderer);
 
 			//renderer.DrawIndexed(6, 0, 0);
-			renderer.DrawIndexedInstanced(6, numParticles, 0, 0, 0);
+			//renderer.DrawIndexedInstanced(6, numParticles, 0, 0, 0);
 
-			//	-	-	End Drawing
 			renderer.SwapBuffers();
+			//	-	-	End Drawing
 			printf("\rDrawing. Framerate = %.0f,\t Last Frame: %.4f,\t Time: %.1f", 1.0f / CalcAvgFramerate(framerateBuffer), delta.count(), appTime.count());
 		}
 	}
 	puts("");
+	if (inputLayout)inputLayout->Release();
+	inputLayout = nullptr;
+	if (vShader)vShader->Release();		 
+	vShader = nullptr;
+	if (pShader)pShader->Release();
+	pShader = nullptr;
+	for (size_t i = 0; i < NumCBuffers; i++)
+	{
+		if (CBuffers[i])CBuffers[i]->Release();
+		CBuffers[i] = nullptr;
+	}
+	if (rasterizerState)rasterizerState->Release();
+	rasterizerState = nullptr;
+	if (depthStencilState)depthStencilState->Release();
+	depthStencilState = nullptr;
+	if (blendState)blendState->Release();
+	blendState = nullptr;
 	return 0;
+}
+
+float CalcAvgFramerate(queue<float> & buffer)
+{
+	// pop until <= MAX_FRAMERATE_TIMES
+	while (buffer.size() > MAX_FRAMERATE_TIMES)
+		buffer.pop();
+	float average = 0;
+	for (size_t i = 0; i < buffer.size(); i++)
+	{
+		average += buffer._Get_container()[i];
+	}
+	return average / buffer.size();
 }
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -411,6 +368,15 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
 	msg = { window, message, wparam, lparam };
 	switch (message)
 	{
+	case WM_KEYDOWN:
+		switch (wparam)
+		{
+		case VK_ESCAPE:
+			DestroyWindow(window);
+			return 0;
+		default:
+			return 0;
+		}
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		isRunning = false;

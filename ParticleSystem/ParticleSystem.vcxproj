@@ -129,6 +129,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ParticleEmitter.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shader.hlsl">
@@ -141,6 +142,7 @@
   <ItemGroup>
     <ClInclude Include="ParticleEmitter.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

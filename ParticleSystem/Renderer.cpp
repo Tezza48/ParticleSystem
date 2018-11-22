@@ -8,12 +8,16 @@ Renderer::Renderer()
 
 Renderer::~Renderer()
 {
-	// if (inputLayout)inputLayout->Release();
 	if (rtv)rtv->Release();
+	rtv = nullptr;
 	if (dsv)dsv->Release();
+	dsv = nullptr;
 	if (swapChain)swapChain->Release();
+	swapChain = nullptr;
 	if (context)context->Release();
+	context = nullptr;
 	if (device)device->Release();
+	device = nullptr;
 }
 
 bool Renderer::Init()

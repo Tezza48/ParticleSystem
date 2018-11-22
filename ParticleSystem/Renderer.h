@@ -11,7 +11,6 @@
 class Renderer
 {
 private:
-
 	ID3D11Device * device;
 	ID3D11DeviceContext * context;
 	IDXGISwapChain * swapChain;
@@ -33,7 +32,7 @@ public:
 
 	ID3D11Buffer * CreateBuffer(D3D11_BUFFER_DESC * desc, D3D11_SUBRESOURCE_DATA * data);
 	ID3D11InputLayout * CreateInputLayout(D3D11_INPUT_ELEMENT_DESC * descs, int count, ID3DBlob * shaderBytecode);
-
+	
 	template<typename T> T * CreateShader(ID3DBlob * compiledShader);
 
 	void ClearDepthStencil(float depth, UINT8 stencil);
