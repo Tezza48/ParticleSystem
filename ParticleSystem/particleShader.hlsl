@@ -21,6 +21,10 @@ struct I_Instance
 {
 	float3 position : POSITION1;
 	float4 color : COLOR;
+	//float4 worldr0 : POSITION2;
+	//float4 worldr1 : POSITION3;
+	//float4 worldr2 : POSITION4;
+	//float4 worldr3 : POSITION5;
 };
 
 struct O_Vertex
@@ -30,12 +34,32 @@ struct O_Vertex
 	float4 color : COLOR;
 };
 
+float4x4 CalcLookAt(float3 eye, float3 target, float3 up)
+{
+	float3 forward = normalize(target - eye);
+	float3 right = normalize(cross(up, forward));
+	up = normalize(cross(forward, right));
+	float3 trans = float3(
+		-dot(right, eye), -dot(up, eye), -dot(forward, eye));
+	return float4x4(
+		float4(right, 0.0), 
+		float4(up, 0.0), 
+		float4(forward, 0.0), 
+		float4(trans, 1.0));
+}
+
 //	-	-  Pipeline Stage Functions	-	-
 O_Vertex vert(I_Vertex iv, I_Instance ii, uint instanceID : SV_InstanceID)
 {
 	O_Vertex o;
-	iv.position += ii.position;
-	o.position = mul(float4(iv.position, 1.0), gViewProjection);
+
+	float4x4 look = CalcLookAt(ii.position, float3(0.0, 0.0, 0.0), float3(0.0, 1.0, 0.0));
+
+	float4 pos = float4(iv.position, 1.0);
+
+	//pos = mul(pos, look);
+	float4x4 wvp = mul(look, gViewProjection);
+	o.position = mul(wvp, pos);
 	//o.position.x += instanceID;
 	o.tex = iv.tex;
 	o.color = ii.color;
@@ -50,5 +74,5 @@ float4 pixel(O_Vertex i) : SV_TARGET
 
 	float circle = smoothstep(size, size - 0.1, length(uv));
 	//if (circle < 0.001) discard;
-	return float4(i.color.xyz, circle * 0.1);
+	return float4(i.color.xyz, circle * 0.5);
 }

@@ -23,13 +23,23 @@ ID3D11Debug * debug;
 #endif // DEBUG || _DEBUG
 
 const int WIDTH = 800, HEIGHT = 800;
-const int MAX_FRAMERATE_TIMES = 100;
+const int MAX_FRAMERATE_TIMES = 5;
 
 bool isRunning = true;
 
 MSG msg;
 
+WindowManager window;
+Renderer renderer;
+
+ParticleEmitter emitter;
+ParticleShader particleShader;
+
 //UINT numParticles = 100;
+
+void Start();
+void Update(float dt, float t);
+void Draw(float dt, float t);
 
 float CalcAvgFramerate(queue<float> & buffer);
 
@@ -46,38 +56,70 @@ int main(int argc, char ** argv)
 	atexit(::Cleanup);
 
 	// Create Win32 Window
-	WindowManager window = WindowManager();
+	window = WindowManager();
 	if (!window.Init(WIDTH, HEIGHT, ::WindowProc))
 		return false;
 	puts("Window Created Successfully");
 
 	// Init D3D
-	Renderer renderer;
 	if (!renderer.Init()) return -1;
 	if (!renderer.OnResize(WIDTH, HEIGHT, window.GetHandle())) return -1;
 
-	HRESULT hr;
 #if DEBUG || _DEBUG
 	// 
-	hr = renderer.GetDevice()->QueryInterface(IID_PPV_ARGS(&debug));
+	HRESULT hr = renderer.GetDevice()->QueryInterface(IID_PPV_ARGS(&debug));
 	if (FAILED(hr)) return false;
 #endif
 
 	// Start
-	ParticleEmitter emitter;
-	emitter.Init(renderer);
-
-	ParticleShader particleShader;
-	particleShader.Init(renderer);
+	Start();
 
 	auto startTime = high_resolution_clock::now();
 	auto lastTime = high_resolution_clock::now();
 
 	queue<float> framerateBuffer;
+	// Run
+	while (isRunning)
+	{
+		if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+		else
+		{
+
+			auto thisTime = high_resolution_clock::now();
+			duration<float> delta = thisTime - lastTime;
+			lastTime = thisTime;
+			float dt = delta.count();
+
+			framerateBuffer.push(dt);
+			duration<float> appTime = thisTime - startTime;
+
+			Update(dt, appTime.count());
+			Draw(dt, appTime.count());
+
+			printf("\rDrawing. Framerate = %.0f,\t Last Frame: %.4f,\t Time: %.1f", 1.0f / CalcAvgFramerate(framerateBuffer), delta.count(), appTime.count());
+		}
+	}
+	puts("");
+	return 0;
+}
+
+void Start()
+{
+	emitter.Init(renderer);
+
+	particleShader.Init(renderer);
+}
+
+void Update(float dt, float t)
+{
 
 	float cameraDistance = 5.0f;
 
-	XMFLOAT3 eyePos = XMFLOAT3(0.0f, 1.6f, -3.0f);
+	XMFLOAT3 eyePos = XMFLOAT3(sin(t) * cameraDistance, 1.6f, cos(t) * cameraDistance);
 	XMFLOAT3 target = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 up = XMFLOAT3(0.0f, 1.0f, 0.0f);
 
@@ -89,52 +131,26 @@ int main(int argc, char ** argv)
 	CBuffer::Application appBuffer = { XMMatrixTranspose(vp) };
 	particleShader.UploadApplicationCBuffer(renderer, appBuffer);
 
-	// Run
+	CBuffer::PerFrame perFrame;
+	perFrame.time = XMFLOAT4(t, dt, 0.0f, 1.0f);
+	XMStoreFloat4(&perFrame.color, DirectX::Colors::CornflowerBlue);
 
-	while (isRunning)
-	{
-		if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		else
-		{
-			renderer.ClearDepthStencil(1.0f, 0);
-			renderer.ClearRenderTarget(DirectX::Colors::Black);
+	particleShader.UploadPerFrameCBuffer(renderer, perFrame);
+}
 
+void Draw(float dt, float t)
+{
+	renderer.ClearDepthStencil(1.0f, 0);
+	renderer.ClearRenderTarget(DirectX::Colors::Black);
 
-			auto thisTime = high_resolution_clock::now();
-			duration<float> delta = thisTime - lastTime;
-			lastTime = thisTime;
-			float dt = delta.count();
+	renderer.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			framerateBuffer.push(dt);
+	// Set State objects, Shaders and Input Layout
+	particleShader.ApplyPass(renderer);
 
-			// Update PerFrame CBuffer
-			duration<float> appTime = thisTime - startTime;
-			
-			CBuffer::PerFrame perFrame;
-			perFrame.time = XMFLOAT4(appTime.count(), dt, 0.0f, 1.0f);
-			XMStoreFloat4(&perFrame.color, DirectX::Colors::CornflowerBlue);
+	emitter.Draw(renderer);
 
-			particleShader.UploadPerFrameCBuffer(renderer, perFrame);
-
-			//	-	-	Begin Drawing
-			renderer.SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-			// Set State objects, Shaders and Input Layout
-			particleShader.ApplyPass(renderer);
-
-			emitter.Draw(renderer);
-
-			renderer.SwapBuffers();
-			//	-	-	End Drawing
-			printf("\rDrawing. Framerate = %.0f,\t Last Frame: %.4f,\t Time: %.1f", 1.0f / CalcAvgFramerate(framerateBuffer), delta.count(), appTime.count());
-		}
-	}
-	puts("");
-	return 0;
+	renderer.SwapBuffers();
 }
 
 float CalcAvgFramerate(queue<float> & buffer)
@@ -160,8 +176,6 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
 		{
 		case VK_ESCAPE:
 			DestroyWindow(window);
-			return 0;
-		default:
 			return 0;
 		}
 	case WM_DESTROY:

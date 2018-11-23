@@ -19,10 +19,11 @@ class ParticleEmitter
 		XMFLOAT3 position;
 		XMFLOAT2 texCoord;
 	};
-	struct InstancePositionColor
+	struct InstancePositionWorldColor
 	{
 		XMFLOAT3 position;
 		XMFLOAT4 color;
+		//XMMATRIX world;
 	};
 private:
 	// union means the 2 vertex buffers are either accessable as an array

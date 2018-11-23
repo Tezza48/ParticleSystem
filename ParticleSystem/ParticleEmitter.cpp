@@ -30,16 +30,19 @@ bool ParticleEmitter::Init(Renderer & renderer)
 	};
 
 	// Initizlize Particles on surface of a sphere
-	InstancePositionColor *instances = new InstancePositionColor[numInstances];
+	InstancePositionWorldColor *instances = new InstancePositionWorldColor[numInstances];
 	std::time_t seed = std::time(nullptr);
 	std::mt19937 mt(static_cast<unsigned int>(seed));
-	std::uniform_real_distribution<float> dist(-2.0f, 2.0f);
+	float size = 3.0f;
+	std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
 	for (size_t i = 0; i < numInstances; i++)
 	{
 		XMVECTOR dir = XMVector3Normalize(XMVectorSet(dist(mt), dist(mt), dist(mt), 0.0f));
-		dir = XMVectorScale(dir, dist(mt));
+		dir = XMVectorScale(dir, size);
 		XMStoreFloat3(&instances[i].position, dir);
-		instances[i].color = XMFLOAT4(dist(mt), dist(mt), dist(mt), 1.0f);
+		instances[i].color = XMFLOAT4(dist(mt) * 0.5f + 0.5f, dist(mt) * 0.5f + 0.5f, dist(mt) * 0.5f + 0.5f, 1.0f);
+		//instances[i].world = XMMatrixLookAtLH(XMLoadFloat3(&instances[i].position), XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+		//instances[i].world = XMMatrixTranspose(instances[i].world);
 	}
 
 	// write once and leave
@@ -54,7 +57,7 @@ bool ParticleEmitter::Init(Renderer & renderer)
 	// write once and we can edit it later
 	D3D11_BUFFER_DESC instanceBufferDesc;
 	instanceBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-	instanceBufferDesc.ByteWidth = sizeof(InstancePositionColor) * numInstances;
+	instanceBufferDesc.ByteWidth = sizeof(InstancePositionWorldColor) * numInstances;
 	instanceBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	instanceBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	instanceBufferDesc.MiscFlags = 0;
@@ -95,7 +98,7 @@ bool ParticleEmitter::Init(Renderer & renderer)
 
 void ParticleEmitter::Draw(Renderer & renderer)
 {
-	UINT strides[] = { sizeof(VertexPositionTexture), sizeof(InstancePositionColor) };
+	UINT strides[] = { sizeof(VertexPositionTexture), sizeof(InstancePositionWorldColor) };
 	UINT offsets[] = { 0 , 0 };
 
 	renderer.SetVertexBuffers(0, 2, vertexBuffers, strides, offsets);
