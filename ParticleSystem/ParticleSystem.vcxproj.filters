@@ -27,11 +27,9 @@
     <ClCompile Include="WindowManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="shader.hlsl">
-      <Filter>Resource Files</Filter>
-    </FxCompile>
+    <ClCompile Include="ParticleShader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Renderer.h">
@@ -43,5 +41,16 @@
     <ClInclude Include="WindowManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ParticleShader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="particleShader.hlsl">
+      <Filter>Resource Files</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

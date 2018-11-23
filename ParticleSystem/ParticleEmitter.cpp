@@ -32,7 +32,7 @@ bool ParticleEmitter::Init(Renderer & renderer)
 	// Initizlize Particles on surface of a sphere
 	InstancePositionColor *instances = new InstancePositionColor[numInstances];
 	std::time_t seed = std::time(nullptr);
-	std::mt19937 mt(seed);
+	std::mt19937 mt(static_cast<unsigned int>(seed));
 	std::uniform_real_distribution<float> dist(-2.0f, 2.0f);
 	for (size_t i = 0; i < numInstances; i++)
 	{

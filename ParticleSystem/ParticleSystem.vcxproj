@@ -128,11 +128,12 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ParticleEmitter.cpp" />
+    <ClCompile Include="ParticleShader.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="shader.hlsl">
+    <FxCompile Include="particleShader.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
@@ -141,7 +142,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ParticleEmitter.h" />
+    <ClInclude Include="ParticleShader.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="Utils.h" />
     <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

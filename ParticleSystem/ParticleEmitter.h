@@ -5,6 +5,13 @@
 
 using namespace DirectX;
 
+struct Particle
+{
+	float birthTime;
+	XMFLOAT3 position;
+	XMFLOAT3 velocity;
+};
+
 class ParticleEmitter
 {
 	struct VertexPositionTexture

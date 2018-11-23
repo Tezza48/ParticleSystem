@@ -30,25 +30,28 @@ public:
 	bool Init();
 	bool OnResize(int width, int height, HWND & window);
 
-	ID3D11Buffer * CreateBuffer(D3D11_BUFFER_DESC * desc, D3D11_SUBRESOURCE_DATA * data);
-	ID3D11InputLayout * CreateInputLayout(D3D11_INPUT_ELEMENT_DESC * descs, int count, ID3DBlob * shaderBytecode);
-	
 	template<typename T> T * CreateShader(ID3DBlob * compiledShader);
 
 	void ClearDepthStencil(float depth, UINT8 stencil);
 	void ClearRenderTarget(const float color[4]);
 
 	void SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY topology);
-	void SetInputLayout(ID3D11InputLayout * inputLayout);
-	void SetVertexBuffers(UINT startSlot, UINT numBuffers, ID3D11Buffer * const * buffers, const UINT * strides, const UINT * offsets);
-	void SetIndexBuffer(ID3D11Buffer * buffer, DXGI_FORMAT format, UINT offset);
-	template<typename T> void SetShader(T * shader);
+
 	void DrawIndexed(UINT numElements, UINT startIndex, int startVertex);
 	void DrawIndexedInstanced(UINT indexCountPerObject, UINT instanceCount, UINT startIndex, int startVertex, UINT startInstance);
 	void SwapBuffers();
 
 	ID3D11DeviceContext * GetContext() const;
 	ID3D11Device * GetDevice() const;
+
+
+	// No Longer nescsary as these are now only used inside classes and away from the programmer
+	ID3D11Buffer * CreateBuffer(D3D11_BUFFER_DESC * desc, D3D11_SUBRESOURCE_DATA * data);
+	ID3D11InputLayout * CreateInputLayout(D3D11_INPUT_ELEMENT_DESC * descs, int count, ID3DBlob * shaderBytecode);
+	void SetInputLayout(ID3D11InputLayout * inputLayout);
+	void SetVertexBuffers(UINT startSlot, UINT numBuffers, ID3D11Buffer * const * buffers, const UINT * strides, const UINT * offsets);
+	void SetIndexBuffer(ID3D11Buffer * buffer, DXGI_FORMAT format, UINT offset);
+	template<typename T> void SetShader(T * shader);
 };
 
 template<typename T>
