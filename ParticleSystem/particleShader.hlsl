@@ -52,15 +52,17 @@ float4x4 CalcLookAt(float3 eye, float3 target, float3 up)
 O_Vertex vert(I_Vertex iv, I_Instance ii, uint instanceID : SV_InstanceID)
 {
 	O_Vertex o;
-
-	float4x4 look = CalcLookAt(ii.position, float3(0.0, 0.0, 0.0), float3(0.0, 1.0, 0.0));
-
+	
 	float4 pos = float4(iv.position, 1.0);
 
+	float4x4 look = CalcLookAt(pos.xyz + ii.position, float3(0.0, 0.0, 0.0), float3(0.0, 1.0, 0.0));
+	look = transpose(look);
+
 	//pos = mul(pos, look);
-	float4x4 wvp = mul(look, gViewProjection);
-	o.position = mul(wvp, pos);
-	//o.position.x += instanceID;
+	//float4x4 wvp = mul(look, gViewProjection);
+	pos = mul(pos, look);
+	pos = mul(pos, gViewProjection);
+	o.position = pos;
 	o.tex = iv.tex;
 	o.color = ii.color;
 	return o;
