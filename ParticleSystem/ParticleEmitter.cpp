@@ -75,8 +75,8 @@ bool ParticleEmitter::Init(Renderer & renderer)
 
 	// indices for quad
 	unsigned int indices[] = {
-	0, 1, 2,
-	0, 2, 3
+		0, 1, 2,
+		0, 2, 3
 	};
 
 	// write once like per vertex buffer

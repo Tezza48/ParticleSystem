@@ -115,7 +115,7 @@ void ParticleShader::Init(Renderer & renderer)
 	D3D11_RASTERIZER_DESC rasterizerDesc;
 	ZeroMemory(&rasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 	rasterizerDesc.FillMode = D3D11_FILL_SOLID;
-	rasterizerDesc.CullMode = D3D11_CULL_NONE;
+	rasterizerDesc.CullMode = D3D11_CULL_BACK;
 	rasterizerDesc.DepthClipEnable = true;
 	rasterizerDesc.ScissorEnable = false;
 	rasterizerDesc.MultisampleEnable = false;
@@ -124,18 +124,20 @@ void ParticleShader::Init(Renderer & renderer)
 
 	D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
 	ZeroMemory(&depthStencilDesc, sizeof(D3D11_DEPTH_STENCIL_DESC));
-	depthStencilDesc.DepthEnable = false;
+	depthStencilDesc.DepthEnable = true;
 
 	renderer.GetDevice()->CreateDepthStencilState(&depthStencilDesc, &pass.depthStencilState);
 
 	D3D11_BLEND_DESC blendDesc;
 	ZeroMemory(&blendDesc, sizeof(D3D11_BLEND_DESC));
-	blendDesc.RenderTarget->BlendEnable = true;
-	blendDesc.RenderTarget->SrcBlend = D3D11_BLEND_SRC_ALPHA;
-	blendDesc.RenderTarget->DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	blendDesc.AlphaToCoverageEnable = false;
+	blendDesc.IndependentBlendEnable = false;
+	blendDesc.RenderTarget->BlendEnable = false;
+	blendDesc.RenderTarget->SrcBlend = D3D11_BLEND_ONE;
+	blendDesc.RenderTarget->DestBlend = D3D11_BLEND_ONE;
 	blendDesc.RenderTarget->BlendOp = D3D11_BLEND_OP_ADD;
-	blendDesc.RenderTarget->SrcBlendAlpha = D3D11_BLEND_ZERO;
-	blendDesc.RenderTarget->DestBlendAlpha = D3D11_BLEND_ZERO;
+	blendDesc.RenderTarget->SrcBlendAlpha = D3D11_BLEND_SRC_ALPHA;
+	blendDesc.RenderTarget->DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
 	blendDesc.RenderTarget->BlendOpAlpha = D3D11_BLEND_OP_ADD;
 	blendDesc.RenderTarget->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 

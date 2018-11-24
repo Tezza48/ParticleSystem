@@ -118,8 +118,8 @@ void Update(float dt, float t)
 {
 
 	float cameraDistance = 5.0f;
-
-	XMFLOAT3 eyePos = XMFLOAT3(sin(t) * cameraDistance, 1.6f, cos(t) * cameraDistance);
+	float speed = 0.5f;
+	XMFLOAT3 eyePos = XMFLOAT3(sin(t * speed) * cameraDistance,0.0f, cos(t * speed) * cameraDistance);
 	XMFLOAT3 target = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 up = XMFLOAT3(0.0f, 1.0f, 0.0f);
 

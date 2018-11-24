@@ -19,7 +19,7 @@ private:
 	ID3D11DepthStencilView * dsv;
 
 	UINT msaaQuality;
-	UINT presentSyncInterval = 0;
+	UINT presentSyncInterval = 1;
 
 public:
 	Renderer();
